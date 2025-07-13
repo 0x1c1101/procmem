@@ -1,8 +1,5 @@
 #pragma once
 
-#ifndef ProcMem_
-#define ProcMem_
-
 #include <windows.h>
 #include <winternl.h>
 #include <iostream>
@@ -76,5 +73,3 @@ private:
 
 };
 
-
-#endif // ProcMem_
