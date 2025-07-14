@@ -4,51 +4,35 @@
 #include <winternl.h>
 #include <iostream>
 
-typedef LONG (NTAPI* pfnNtSuspendProcess) (HANDLE);
-typedef LONG (NTAPI* pfnNtResumeProcess)(HANDLE);
-typedef NTSTATUS(NTAPI* pfnNtTerminateProcess)(HANDLE ProcessHandle, NTSTATUS ExitStatus);
-typedef NTSTATUS(NTAPI* pfnNtOpenProcess)(
-    PHANDLE ProcessHandle,
-    ACCESS_MASK DesiredAccess,
-    POBJECT_ATTRIBUTES ObjectAttributes,
-    CLIENT_ID *ClientId
-);
-typedef NTSTATUS(NTAPI* pfnNtReadVirtualMemory)(
-    HANDLE ProcessHandle,
-    PVOID BaseAddress,
-    PVOID Buffer,
-    ULONG NumberOfBytesToRead,
-    PULONG NumberOfBytesReaded
-);
+#pragma comment(lib, "ntdll.lib")
 
-typedef NTSTATUS(NTAPI* pfnNtWriteVirtualMemory)(
-    HANDLE ProcessHandle,
-    PVOID BaseAddress,
-    PVOID Buffer,
-    ULONG NumberOfBytesToWrite,
-    PULONG NumberOfBytesWritten
-);
+extern "C" NTSTATUS NTAPI NtSuspendProcess(HANDLE ProcessHandle);
+extern "C" NTSTATUS NTAPI NtResumeProcess(HANDLE ProcessHandle);
+extern "C" NTSTATUS NTAPI NtTerminateProcess(HANDLE ProcessHandle, NTSTATUS ExitStatus);
+extern "C" NTSTATUS NTAPI NtOpenProcess(PHANDLE ProcessHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes, CLIENT_ID* ClientId);
+extern "C" NTSTATUS NTAPI NtReadVirtualMemory(HANDLE ProcessHandle, PVOID BaseAddress, PVOID Buffer, ULONG NumberOfBytesToRead, PULONG NumberOfBytesReaded);
+extern "C" NTSTATUS NTAPI NtWriteVirtualMemory(HANDLE ProcessHandle, PVOID BaseAddress, PVOID Buffer, ULONG NumberOfBytesToWrite, PULONG NumberOfBytesWritten);
 
-class Memory_ {
+namespace ProcMem {
+
+class Process {
 public:
-    Memory_(std::string arg_procName);
-    ~Memory_();
-    void ResetProc();
-    
+    Process(std::string arg_procName);
+    ~Process();
 
     bool OpenHandle(DWORD perm);
+    void Reset();
 
     inline bool HasPerm(const DWORD perm) {
         return m_perms & perm;
     };
 
-    bool SuspendProc();
-    bool ResumeProc();
-    bool ReadProcMem(uintptr_t vAddr, LPVOID buffer, SIZE_T size, SIZE_T &bytesRead);
-    bool WriteProcMem(uintptr_t vAddr, LPVOID buffer, SIZE_T size, SIZE_T &bytesWritten);
-
-    uintptr_t PatternGetAddr(std::string pat_str);
+    bool Suspend();
+    bool Resume();
     bool Terminate();
+    bool ReadMemory(uintptr_t vAddr, LPVOID buffer, SIZE_T size, SIZE_T &bytesRead);
+    bool WriteMemory(uintptr_t vAddr, LPVOID buffer, SIZE_T size, SIZE_T &bytesWritten);
+    uintptr_t PatternGetAddr(std::string pat_str);
     bool GetPID();
     bool SetDebugPrivilege(const bool enabled);
     bool GetModuleBaseAddress(DWORD pid, const wchar_t* moduleName);
@@ -60,16 +44,8 @@ public:
 
 private:
     std::string m_procName = "";
-
-    pfnNtSuspendProcess NtSuspendProcess = NULL;
-    pfnNtSuspendProcess NtResumeProcess = NULL;
-    pfnNtTerminateProcess NtTerminateProcess = NULL;
-    pfnNtOpenProcess NtOpenProcess = NULL;
-    pfnNtReadVirtualMemory NtReadVirtualMemory = NULL;
-    pfnNtWriteVirtualMemory NtWriteVirtualMemory = NULL;
-
     bool m_isSuspended = false;
     DWORD m_perms = 0;
 
 };
-
+}

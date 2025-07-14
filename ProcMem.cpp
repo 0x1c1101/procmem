@@ -3,74 +3,26 @@
 #include <string>
 #include <sstream>
 #include <tlhelp32.h>
+#include <Psapi.h>
 
-Memory_::Memory_(std::string arg_procName)
+using namespace ProcMem;
+
+Process::Process(std::string arg_procName) : m_procName(std::move(arg_procName))
 {
-    m_procName = arg_procName;
-
-    HMODULE hNtDll = GetModuleHandleW(L"ntdll.dll");
-    if (!hNtDll)
-    {
-        std::cout << "[!] Failed to get ntdll.dll module.\n";
-        return;
-    }
-
-    NtSuspendProcess = (pfnNtSuspendProcess)GetProcAddress(hNtDll, "NtSuspendProcess");
-    if (!NtSuspendProcess)
-    {
-        std::cout << "[!] Failed to get NtSuspendProcess.\n";
-        return;
-    }
-
-    NtResumeProcess = (pfnNtResumeProcess)GetProcAddress(hNtDll, "NtResumeProcess");
-    if (!NtResumeProcess)
-    {
-        std::cout << "[!] Failed to get NtResumeProcess.\n";
-        return;
-    }
-
-    NtTerminateProcess = (pfnNtTerminateProcess)GetProcAddress(hNtDll, "NtTerminateProcess");
-    if (!NtTerminateProcess)
-    {
-        std::cout << "[!] Failed to get NtTerminateProcess.\n";
-        return;
-    }
-
-    NtOpenProcess = (pfnNtOpenProcess)GetProcAddress(hNtDll, "NtOpenProcess");
-    if (!NtOpenProcess)
-    {
-        std::cout << "[!] Failed to get NtOpenProcess.\n";
-        return;
-    }
-
-    NtReadVirtualMemory = (pfnNtReadVirtualMemory)GetProcAddress(hNtDll, "NtReadVirtualMemory");
-    if (!NtReadVirtualMemory)
-    {
-        std::cout << "[!] Failed to get NtReadVirtualMemory.\n";
-        return;
-    }
-
-    NtWriteVirtualMemory = (pfnNtWriteVirtualMemory)GetProcAddress(hNtDll, "NtWriteVirtualMemory");
-    if (!NtWriteVirtualMemory)
-    {
-        std::cout << "[!] Failed to get NtWriteVirtualMemory.\n";
-        return;
-    }
-
     SetDebugPrivilege(true);
 }
 
-Memory_::~Memory_()
+Process::~Process()
 {
     if (m_isSuspended)
-        ResumeProc();
+        Resume();
 
     SetDebugPrivilege(false);
 
-    ResetProc();
+    Reset();
 }
 
-void Memory_::ResetProc()
+void Process::Reset()
 {
     m_baseAddr = 0;
     m_baseSize = 0;
@@ -85,7 +37,7 @@ void Memory_::ResetProc()
 
 }
 
-bool Memory_::OpenHandle(DWORD perm)
+bool Process::OpenHandle(DWORD perm)
 {
     if (m_pID == 0) {
         if (!GetPID())
@@ -120,16 +72,15 @@ bool Memory_::OpenHandle(DWORD perm)
     return true;
 }
 
-bool Memory_::SuspendProc()
+bool Process::Suspend()
 {
     if (!m_handle || !HasPerm(PROCESS_SUSPEND_RESUME | PROCESS_QUERY_INFORMATION)) {
-        if (!OpenHandle(PROCESS_SUSPEND_RESUME | PROCESS_QUERY_INFORMATION))
+        if (!OpenHandle(m_perms | PROCESS_SUSPEND_RESUME | PROCESS_QUERY_INFORMATION))
             return false;
     }
 
-    LONG status = NtSuspendProcess(m_handle);
-    if (status != 0)
-    {
+    auto status = NtSuspendProcess(m_handle);
+    if (!NT_SUCCESS(status)) {
         std::cout << "[-] Failed to suspend process. NTSTATUS: " << std::hex << status << std::endl;
         return false;
     }
@@ -139,17 +90,16 @@ bool Memory_::SuspendProc()
     return true;
 }
 
-bool Memory_::ResumeProc()
+bool Process::Resume()
 {
     if (!m_handle || !HasPerm(PROCESS_SUSPEND_RESUME | PROCESS_QUERY_INFORMATION)) {
-        if (!OpenHandle(PROCESS_SUSPEND_RESUME | PROCESS_QUERY_INFORMATION))
+        if (!OpenHandle(m_perms | PROCESS_SUSPEND_RESUME | PROCESS_QUERY_INFORMATION))
             return false;
 
     }
 
-    LONG status = NtResumeProcess(m_handle);
-    if (status != 0)
-    {
+    auto status = NtResumeProcess(m_handle);
+    if (!NT_SUCCESS(status)) {
         std::cout << "[-] Failed to resume process. NTSTATUS: " << std::hex << status << std::endl;
         return false;
     }
@@ -159,10 +109,10 @@ bool Memory_::ResumeProc()
     return true;
 }
 
-bool Memory_::ReadProcMem(uintptr_t vAddr, LPVOID buffer, SIZE_T size, SIZE_T& bytesRead)
+bool Process::ReadMemory(uintptr_t vAddr, LPVOID buffer, SIZE_T size, SIZE_T& bytesRead)
 {
     if (!m_handle || !HasPerm(PROCESS_VM_READ)) {
-        if (!OpenHandle(PROCESS_VM_READ))
+        if (!OpenHandle(m_perms | PROCESS_VM_READ))
             return false;
     }
 
@@ -199,10 +149,10 @@ bool Memory_::ReadProcMem(uintptr_t vAddr, LPVOID buffer, SIZE_T size, SIZE_T& b
     return true;
 }
 
-bool Memory_::WriteProcMem(uintptr_t vAddr, LPVOID buffer, SIZE_T size, SIZE_T& bytesWritten)
+bool Process::WriteMemory(uintptr_t vAddr, LPVOID buffer, SIZE_T size, SIZE_T& bytesWritten)
 {
     if (!m_handle || !HasPerm(PROCESS_VM_WRITE)) {
-        if (!OpenHandle(PROCESS_VM_WRITE))
+        if (!OpenHandle(m_perms | PROCESS_VM_WRITE))
             return false;
     }
 
@@ -218,7 +168,7 @@ bool Memory_::WriteProcMem(uintptr_t vAddr, LPVOID buffer, SIZE_T size, SIZE_T& 
     return true;
 }
 
-uintptr_t Memory_::PatternGetAddr(std::string pat_str)
+uintptr_t Process::PatternGetAddr(std::string pat_str)
 {
     if (!m_handle || !m_pID) {
         std::cout << "[-] Failed to get pattern. Handle or the PID is NULL.\n";
@@ -263,7 +213,7 @@ uintptr_t Memory_::PatternGetAddr(std::string pat_str)
     while (currChunk < m_baseAddr + m_baseSize)
     {
         SIZE_T bytesRead = 0;
-        if (!ReadProcMem(currChunk, &buffer, sizeof(buffer), bytesRead) || !bytesRead) {
+        if (!ReadMemory(currChunk, &buffer, sizeof(buffer), bytesRead) || !bytesRead) {
             std::cout << "[-] Failed to read memory at address " << currChunk << ".\n";
             return 0;
         }
@@ -306,10 +256,10 @@ uintptr_t Memory_::PatternGetAddr(std::string pat_str)
     return 0;
 }
 
-bool Memory_::Terminate()
+bool Process::Terminate()
 {
     if (!m_handle || !HasPerm(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION)) {
-        if (!OpenHandle(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION))
+        if (!OpenHandle(m_perms | PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION))
             return false;
     }
     if (!m_handle)
@@ -319,13 +269,13 @@ bool Memory_::Terminate()
     if (NT_SUCCESS(result))
     {
         std::cout << "[+] Process " << m_procName << " has been terminated successfully.\n";
-        ResetProc();
+        Reset();
     }
 
     return result;
 }
 
-bool Memory_::GetPID()
+bool Process::GetPID()
 {
     if (m_procName.empty())
         return false;
@@ -352,7 +302,7 @@ bool Memory_::GetPID()
     return false; // Not found
 }
 
-bool Memory_::SetDebugPrivilege(const bool enabled)
+bool Process::SetDebugPrivilege(const bool enabled)
 {
     HANDLE hToken;
     TOKEN_PRIVILEGES tp;
@@ -378,22 +328,43 @@ bool Memory_::SetDebugPrivilege(const bool enabled)
     return result && GetLastError() == ERROR_SUCCESS;
 }
 
-bool Memory_::GetModuleBaseAddress(DWORD pid, const wchar_t* moduleName)
+bool Process::GetModuleBaseAddress(DWORD pid, const wchar_t* moduleName)
 {
-    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
-    MODULEENTRY32 modEntry = { sizeof(MODULEENTRY32) };
+    DWORD pids[1024], bytesNeeded;
+    if (!EnumProcesses(pids, sizeof(pids), &bytesNeeded))
+        return false;
 
-    if (Module32First(hSnapshot, &modEntry)) {
-        do {
-            if (!_wcsicmp(modEntry.szModule, moduleName)) {
-                CloseHandle(hSnapshot);
-                m_baseAddr = (uintptr_t)modEntry.modBaseAddr;
-                m_baseSize = modEntry.modBaseSize;
-                return true;
+    size_t count = bytesNeeded / sizeof(DWORD);
+    for (size_t i = 0; i < count; ++i) {
+        if (pids[i] != pid) continue;
+
+        HANDLE hProc = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+        if (!hProc) return false;
+
+        HMODULE mods[1024];
+        DWORD cbNeededMods;
+        if (EnumProcessModulesEx(hProc, mods, sizeof(mods), &cbNeededMods, LIST_MODULES_ALL)) {
+            size_t modCount = cbNeededMods / sizeof(HMODULE);
+            for (size_t j = 0; j < modCount; ++j) {
+                wchar_t baseName[MAX_PATH];
+                if (GetModuleBaseNameW(hProc, mods[j], baseName, _countof(baseName))) {
+                    if (_wcsicmp(baseName, moduleName) == 0) {
+                        MODULEINFO mi;
+                        if (GetModuleInformation(hProc, mods[j], &mi, sizeof(mi))) {
+                            m_baseAddr = reinterpret_cast<uintptr_t>(mi.lpBaseOfDll);
+                            m_baseSize = mi.SizeOfImage;
+                            CloseHandle(hProc);
+                            return true;
+                        }
+                    }
+                }
             }
-        } while (Module32Next(hSnapshot, &modEntry));
+        }
+
+        CloseHandle(hProc);
+        break;
     }
 
-    CloseHandle(hSnapshot);
+
     return false;
 }
