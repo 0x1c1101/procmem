@@ -12,10 +12,11 @@ It's a simple _external process_ management library that I used in my game cheat
 ## Example Usage
 
 ```cpp
-void SetFPSLimit(const int fps) {
+void SetFPSLimit(const int newLimit) {
     try {
         using namespace ProcMem;
 
+	// You can directly use PID -> Process(1219)
         Process pr = Process("test.exe");
 
         pr.OpenHandle(PROCESS_VM_READ | PROCESS_SUSPEND_RESUME);
@@ -26,12 +27,12 @@ void SetFPSLimit(const int fps) {
         SIZE_T bytesread = 0;
         pr.ReadMemory(addr - 4, &offset, sizeof(offset), bytesread);
 
-        int oldfps = 0;
-        pr.ReadMemory(addr + offset, &oldfps, sizeof(oldfps), bytesread);
+        int currentFPS = 0;
+        pr.ReadMemory(addr + offset, &currentFPS, sizeof(currentFPS), bytesread);
         pr.Resume();
 
-        if (oldfps != fps) {
-            if (pr.WriteMemory(addr + offset, &fps, sizeof(fps), bytesread))
+        if (currentFPS != newLimit) {
+            if (pr.WriteMemory(addr + offset, &newLimit, sizeof(newLimit), bytesread))
                 cout << "[+] FPS limit has been removed..." << endl;
         }
     }
