@@ -31,7 +31,7 @@ public:
     void OpenHandle(DWORD perm);
     void Reset();
 
-    inline bool HasPerm(const DWORD perm) {
+    bool HasPerm(const DWORD perm) {
         return m_perms & perm;
     };
 
@@ -49,7 +49,7 @@ public:
     HANDLE m_handle = NULL;
 
 private:
-    std::string m_procName = "";
+    std::string m_processName = "";
     bool m_isSuspended = false;
     DWORD m_perms = 0;
     std::unordered_map<std::string, CUSTOM_MODULEINFO> m_modules;

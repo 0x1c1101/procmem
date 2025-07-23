@@ -5,7 +5,7 @@
 
 using namespace ProcMem;
 
-Process::Process(std::string arg_procName) : m_procName(std::move(arg_procName))
+Process::Process(std::string arg_procName) : m_processName(std::move(arg_procName))
 {
     if (!SetDebugPrivilege(true))
         throw std::exception("[-] Could not set the debug privilege.");
@@ -80,7 +80,7 @@ bool Process::Suspend()
         return false;
     }
 
-    std::cout << "[+] Process " << m_procName << " suspended successfully.\n";
+    std::cout << "[+] Process " << m_processName << " suspended successfully.\n";
     m_isSuspended = true;
     return true;
 }
@@ -96,7 +96,7 @@ bool Process::Resume()
         return false;
     }
     
-    std::cout << "[+] Process " << m_procName << " resumed successfully.\n";
+    std::cout << "[+] Process " << m_processName << " resumed successfully.\n";
     m_isSuspended = false;
     return true;
 }
@@ -176,7 +176,7 @@ uintptr_t Process::PatternGetAddr(std::string pat_str, std::string module_name)
         return 0;
     }
 
-    auto moduleInfo = GetModuleInfo((module_name.empty() ? m_procName : module_name));
+    auto moduleInfo = GetModuleInfo((module_name.empty() ? m_processName : module_name));
     if (!moduleInfo) {
         std::cout << "[-] Could not get the Module Information.\n";
         return 0;
@@ -240,7 +240,7 @@ bool Process::Terminate()
     auto result = NtTerminateProcess(m_handle, 0);
     if (NT_SUCCESS(result))
     {
-        std::cout << "[+] Process " << m_procName << " has been terminated successfully.\n";
+        std::cout << "[+] Process " << m_processName << " has been terminated successfully.\n";
         Reset();
     }
     return result;
@@ -248,10 +248,10 @@ bool Process::Terminate()
 
 bool Process::GetPID()
 {
-    if (m_procName.empty())
+    if (m_processName.empty())
         throw std::exception("GetPID(): Process Name is empty.");
 
-    std::wstring process_name = std::wstring(m_procName.begin(), m_procName.end());
+    std::wstring process_name = std::wstring(m_processName.begin(), m_processName.end());
 
     PVOID buffer = NULL;
     ULONG bufSize = 0;
