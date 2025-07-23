@@ -5,8 +5,9 @@ It's a simple _external process_ management library that I used in my game cheat
 - Suspend/Resume Process
 - Terminate Process
 - Read/Write Memory
-- Handle Permission Management
+- Permission Management
 - Fast Pattern Scanning (Boyer-Moore)
+- Restore when out of scope
 
 
 ## Example Usage
