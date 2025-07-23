@@ -1,4 +1,4 @@
-It's a simple _external process_ management library that I used in my game cheat. It utilizes API functions only from the ntdll.dll for stealth.
+It's a simple _external process_ management library that I used in my game cheat. It utilizes API functions only from the `ntdll.dll` for stealth. You can use the `GetProcAddress()` if you want to load functions dynamically and hide them from the Import Address Table.
 
 ## Features
 
